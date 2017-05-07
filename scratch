@@ -1,0 +1,25 @@
+/*
+//iterate through each observation and transform it to map frame
+// OBS to MAP
+std::vector<LandmarkObs> oberservations_map;
+
+for (int j=0; j<observations.size(); j++){
+
+  double x_o = observations[j].x;
+  double y_o = observations[j].y;
+  int id = observations[j].id; // shouldn't need this
+
+  double x_m;
+  double y_m;
+
+  //rotate by theta and translate
+  x_m = x_o*cos(p_theta) + y_o*sin(p_theta) + p_x;
+  y_m = y_o*-1.0*sin(p_theta) + y_o*cos(p_theta) + p_y; //NEGATIVE SIN FOR Y AXIS DOWN?
+
+  LandmarkObs obs_map;
+  obs_map.x = x_m;
+  obs_map.y = y_m;
+  obs_map.id = id;
+
+  observations_map.push_back(obs_map);
+} */

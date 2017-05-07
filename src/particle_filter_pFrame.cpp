@@ -104,7 +104,7 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 				observations[i].id = id_lm;
 			}
 		}
-		// cout << "observation " << i << " associated with LM " << observations[i].id << " dist=" << min_dist<<endl;
+		cout << "observation " << i << " associated with LM " << observations[i].id << " dist=" << min_dist<<endl;
 	}
 }
 
@@ -122,6 +122,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   for the fact that the map's y-axis actually points downwards.)
 	//   http://planning.cs.uiuc.edu/node99.html
 
+	// normal_distribution<double> x_lm(0, std_landmark[0]);
+	// normal_distribution<double> y_lm(0, std_landmark[1]);
+
 	//iterate through each particle
 	for (int i=0; i<num_particles; i++){
 
@@ -129,71 +132,67 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 		double p_x = particles[i].x;
 		double p_y = particles[i].y;
 		double p_theta = particles[i].theta;
-		// cout <<"p_x: "<<p_x<<" p_y: "<<p_y<< " p_theta: " << p_theta << endl;
+		cout <<"p_x: "<<p_x<<" p_y: "<<p_y<< " p_theta: " << p_theta << endl;
 
 
-		//iterate through each observation and transform it to map frame
-		// OBSERVATION CAR FRAME TO MAP FRAME
-		std::vector<LandmarkObs> observations_map;
+		//LANDMARK TO PARTICLE FRAME
+		//iterate through the map landmarks and transform them to particle frame
+		std::vector<LandmarkObs> landmarks_p;
+		for (int j=0; j < map_landmarks.landmark_list.size(); j++){
+			double x_lm_m = map_landmarks.landmark_list[j].x_f;
+			double y_lm_m = map_landmarks.landmark_list[j].y_f;
+			int lm_id_m = map_landmarks.landmark_list[j].id_i;
 
-		for (int j=0; j<observations.size(); j++){
+			//apply -theta rotation and -p_xy translation
+			double x_lm_p = x_lm_m*cos(p_theta) + y_lm_m*1.0*sin(p_theta) - p_x;
+			double y_lm_p = x_lm_m*-1.0*sin(p_theta) + y_lm_m*cos(p_theta) - p_y; //NEGATIVE SIN FOR Y AXIS DOWN?
 
-		  double x_o = observations[j].x;
-		  double y_o = observations[j].y;
-		  int id = observations[j].id; // shouldn't need this
-
-		  double x_m;
-		  double y_m;
-
-		  //rotate by theta and translate
-		  x_m = x_o*cos(p_theta) + y_o*-1.0*sin(p_theta) + p_x;
-		  y_m = x_o*1.0*sin(p_theta) + y_o*cos(p_theta) + p_y; //NEGATIVE SIN FOR Y AXIS DOWN?
-
-			LandmarkObs obs_m;
-			obs_m.x = x_m;
-			obs_m.y = y_m;
-			obs_m.id = id;
-			observations_map.push_back(obs_m);
-
-		}
-
-		// predicted map landmarks
-		std::vector<LandmarkObs> lms_predicted;
-		for (int k=0; k<map_landmarks.landmark_list.size(); k++) {
-
-			if(dist(p_x, p_y, map_landmarks.landmark_list[k].x_f, map_landmarks.landmark_list[k].y_f) < sensor_range) {
-				LandmarkObs lm_pred;
-				lm_pred.id = map_landmarks.landmark_list[k].id_i;
-				lm_pred.x = map_landmarks.landmark_list[k].x_f;
-				lm_pred.y = map_landmarks.landmark_list[k].y_f;
-				lms_predicted.push_back(lm_pred);
+			// if we are in sensor range, append the landmark
+			// USing the LandmarkObs class to store a list of predicted lms
+			if (dist(0,0,x_lm_p, y_lm_p) <= sensor_range) {
+				LandmarkObs lm_p;
+				lm_p.x = x_lm_p;
+				lm_p.y = y_lm_p;
+				lm_p.id = lm_id_m;
+				landmarks_p.push_back(lm_p);
+				// cout << "x_p= " << x_lm_p << " y_p= " << y_lm_p <<endl;
+				// cout << "x_m= " << x_lm_m << " y_m= " << y_lm_m <<endl;
+				// cout << "p_x= " << p_x << " p_y= " << p_y << " p_theta= " << p_theta <<endl;
+				// cout << dist(0,0,x_lm_p, y_lm_p) << endl;
+				// cout << dist(x_lm_m, y_lm_m, p_x, p_y) <<endl;
 			}
 		}
+		// cout << "particle #: " << i <<endl;
+		// cout << "num lm in range: " << landmarks_p.size() <<endl;
+		// cout << "num obs: " << observations.size() <<endl;
+		dataAssociation(landmarks_p,observations);
 
-		dataAssociation(lms_predicted,observations_map);
+		
+
+
 
 		//calculate the weight of each particle
 		double sigma_x = std_landmark[0];
 		double sigma_y = std_landmark[1];
 		double P = 1.0; // particles probability
-
-		for (int k=0; k<observations_map.size(); k++){
-			double x = observations_map[k].x;
-			double y = observations_map[k].y;
-			int id = observations_map[k].id; // associated LM ID
+		for (int k=0; k<observations.size(); k++){
+			double x = observations[k].x;
+			double y = observations[k].y;
+			int id = observations[k].id; // associated LM ID
 			double mu_x = 999.0;
 			double mu_y = 999.0;
 			// cout << "observation " << k << " associated with id " << id << endl;
 
 			//search and match for the corresponding landmark ID
-			for (int j=0; j<lms_predicted.size(); j++){
+			for (int j=0; j<landmarks_p.size(); j++){
+
 				// cout << "L id" << landmarks_p[j].id << endl;
-				if (lms_predicted[j].id == id){
-					mu_x = lms_predicted[j].x;
-					mu_y = lms_predicted[j].y;
-					// cout << "ASSOCIATED" << endl; //debug
-					// cout << mu_x << " <x> " << x <<endl; //debug
-					// cout << mu_y << " <y> " << y <<endl; //debug
+				if (landmarks_p[j].id == id){
+					mu_x = landmarks_p[j].x;
+					mu_y = landmarks_p[j].y;
+					// cout << "ASSOCIATED" << endl;
+					// cout << mu_x << " <x> " << x <<endl;
+					// cout << mu_y << " <y> " << y <<endl;
 					break;
 				}
 				//cout << "NO ASSOCIATION" << endl;
@@ -205,10 +204,10 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 		}
 		particles[i].weight = P;
 		weights[i] = P;
-		// cout << "P[" << i <<"]: " << P << endl;
+		cout << "P[" << i <<"]: " << P << endl;
 	}
 
-	//normalize weights 0..1 -- Don't need this
+	//normalize weights 0..1
 	// //find the max and min weights
 	// double max_weight = 0.0;
 	// double min_weight = 1.0;
@@ -234,10 +233,8 @@ void ParticleFilter::resample() {
 	// TODO: Resample particles with replacement with probability proportional to their weight.
 	// NOTE: You may find std::discrete_distribution helpful here.
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
-
 	default_random_engine gen;
 	discrete_distribution<> discdist(weights.begin(), weights.end());
-
 	std::vector<Particle> resampled_particles;
 	for (int i = 0; i < num_particles; ++i)
 			resampled_particles.push_back(particles[discdist(gen)]);
